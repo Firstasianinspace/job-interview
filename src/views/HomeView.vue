@@ -1,73 +1,91 @@
 <script setup lang="ts">
-import { reactive, computed, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
 
 interface ISport {
   id: number;
   name: string;
+  division: string;
+  country: string;
 }
 
+interface IFilterQuery<T> {
+  [key: string]: T | undefined;
+}
+
+const route = useRoute()
 const router = useRouter()
 
 const sports: ISport[] = [
-  { id: 1, name: "Football" },
-  { id: 2, name: "Basketball" },
-  { id: 3, name: "Volleyball" },
+  { id: 1, name: "Football", division: "EPL", country: "England" },
+  { id: 2, name: "Basketball", division: "NBA", country: "USA"  },
+  { id: 3, name: "Volleyball", division: "Seria A", country: "Italy"  },
 ];
-// reactive more suitable/scalable for rich-object filters
-const filters = reactive({
-  sport: null as number | null,
-});
 
-const selectedSportName = computed(() => sports.find(sport => sport.id === filters.sport)?.name || '');
+const isReset = ref(false);
+let filters = reactive<IFilterQuery<string | number>>({});
 
-const updateQuery = () => {
-  const query: Record<string, string> = {};
-  if (filters.sport !== null) {
-    query['sportId'] = filters.sport.toString();
-    query['sportName'] = selectedSportName.value;
-  }
-  router.push({ query });
-};
-
-const initializeFiltersFromQuery = () => {
-  const query = router.currentRoute.value.query;
-  if (query.sportId) {
-    filters.sport = parseInt(query.sportId as string);
+const parseQueryFilters = (): void => {
+  const query = route.query;
+  for (const key in query) {
+    if (query.hasOwnProperty(key)) {
+      filters[key] = query[key] as T;
+    }
   }
 }
 
-const resetFilter = () => {
-  filters.sport = null;
-  updateQuery();
-};
-
-watch(
-  () => router.currentRoute.value.query,
-  (newQuery) => {
-    if (newQuery.sportId) {
-      filters.sport = parseInt(newQuery.sportId as string);
-    } else {
-      filters.sport = null;
+const parsedFilters = computed<IFilterQuery<string | number>>({
+  get: () => {
+    if (isReset.value) {
+      return {} as IFilterQuery<string | number>; // Empty object on reset
     }
+    return filters;
   },
-  { deep: true }
-);
-
-
-onMounted(() => {
-  initializeFiltersFromQuery()
+  set: (newValue: IFilterQuery<string | number>) => {
+    filters = newValue;
+  }
 });
+
+const updateFilters = (newFilters: IFilterQuery<string | number>) => {
+  const query = new URLSearchParams();
+  for (const key in newFilters) {
+    if (newFilters.hasOwnProperty(key) && newFilters[key] !== undefined) {
+      query.set(key, newFilters[key]!.toString());
+    }
+  }
+  router.push({ query: {
+    ...newFilters,
+  } });
+}
+
+const resetFilters = () => {
+  isReset.value = true;
+  router.replace({ query: {} })
+}
+
+parseQueryFilters()
+
 </script>
 <template>
-  <div class="app-container">
-    <select v-model="filters.sport" @change="updateQuery">
+  <div>
+    <select v-model="parsedFilters.id" @change="updateFilters(parsedFilters)">
       <option v-for="sport in sports" :key="sport.id" :value="sport.id">
+        {{ sport.id }}
+      </option>
+    </select>
+    <select v-model="parsedFilters.name" @change="updateFilters(parsedFilters)">
+      <option v-for="sport in sports" :key="sport.id" :value="sport.name">
         {{ sport.name }}
       </option>
     </select>
+    <select v-model="parsedFilters.division" @change="updateFilters(parsedFilters)">
+      <option v-for="sport in sports" :key="sport.id" :value="sport.division">
+        {{ sport.division }}
+      </option>
+    </select>
     <br />
-    <button class="btn" @click="resetFilter">Стереть значение в селекте</button>
+    <button class="btn" @click="resetFilters">Стереть значение в селекте</button>
   </div>
 </template>
 
